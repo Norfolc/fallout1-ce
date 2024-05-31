@@ -1316,6 +1316,53 @@ void exit_inventory(bool shouldEnableIso)
     }
 }
 
+static void show_items_weight(Object* object, unsigned char* windowBuffer, int pitch, int scroller_x, int scroller_y)
+{
+    char formattedText[20];
+    formattedText[0] = '\0';
+
+    int oldFont = text_curr();
+    text_font(101);
+
+    CacheEntry* key;
+    int backgroundFid = art_id(OBJ_TYPE_INTERFACE, 114, 0, 0, 0);
+    unsigned char* data = art_ptr_lock_data(backgroundFid, 0, 0, &key);
+    if (data != NULL) {
+        int x = scroller_x;
+        int y = scroller_y + inven_cur_disp * INVENTORY_SLOT_HEIGHT + 2;
+        buf_to_buf(data + pitch * y + x,
+            INVENTORY_SLOT_WIDTH,
+            text_height(),
+            pitch,
+            windowBuffer + pitch * y + x,
+            pitch);
+        art_ptr_unlock(key);
+    }
+
+    int color = colorTable[992];
+    if (PID_TYPE(object->pid) == OBJ_TYPE_CRITTER) {
+        int currentWeight = item_total_weight(object);
+        int maxWeight = stat_level(object, STAT_CARRY_WEIGHT);
+        snprintf(formattedText, sizeof(formattedText), "%d/%d", currentWeight, maxWeight);
+    } else if (PID_TYPE(object->pid) == OBJ_TYPE_ITEM) {
+        if (item_get_type(object) == ITEM_TYPE_CONTAINER) {
+            int currentSize = item_c_curr_size(object);
+            int maxSize = item_c_max_size(object);
+            snprintf(formattedText, sizeof(formattedText), "%d/%d", currentSize, maxSize);
+        }
+    } else {
+        int inventoryWeight = item_total_weight(object);
+        snprintf(formattedText, sizeof(formattedText), "%d", inventoryWeight);
+    }
+
+    int width = text_width(formattedText);
+    int x = scroller_x + INVENTORY_SLOT_WIDTH / 2 - width / 2;
+    int y = scroller_y + INVENTORY_SLOT_HEIGHT * inven_cur_disp + 2;
+    text_to_buf(windowBuffer + pitch * y + x, formattedText, width, pitch, color);
+
+    text_font(oldFont);
+}
+
 // 0x463758
 void display_inventory(int first_item_index, int selected_index, int inventoryWindowType)
 {
@@ -1467,44 +1514,7 @@ void display_inventory(int first_item_index, int selected_index, int inventoryWi
 
     // CE: Show items weight.
     if (inventoryWindowType == INVENTORY_WINDOW_TYPE_LOOT) {
-        char formattedText[20];
-
-        int oldFont = text_curr();
-        text_font(101);
-
-        CacheEntry* key;
-        int backgroundFid = art_id(OBJ_TYPE_INTERFACE, 114, 0, 0, 0);
-        unsigned char* data = art_ptr_lock_data(backgroundFid, 0, 0, &key);
-        if (data != NULL) {
-            int x = INVENTORY_LOOT_LEFT_SCROLLER_X;
-            int y = INVENTORY_LOOT_LEFT_SCROLLER_Y + inven_cur_disp * INVENTORY_SLOT_HEIGHT + 2;
-            buf_to_buf(data + pitch * y + x,
-                INVENTORY_SLOT_WIDTH,
-                text_height(),
-                pitch,
-                windowBuffer + pitch * y + x,
-                pitch);
-            art_ptr_unlock(key);
-        }
-
-        Object* object = stack[0];
-
-        int color = colorTable[992];
-        if (PID_TYPE(object->pid) == OBJ_TYPE_CRITTER) {
-            int carryWeight = stat_level(object, STAT_CARRY_WEIGHT);
-            int inventoryWeight = item_total_weight(object);
-            snprintf(formattedText, sizeof(formattedText), "%d/%d", inventoryWeight, carryWeight);
-        } else {
-            int inventoryWeight = item_total_weight(object);
-            snprintf(formattedText, sizeof(formattedText), "%d", inventoryWeight);
-        }
-
-        int width = text_width(formattedText);
-        int x = INVENTORY_LOOT_LEFT_SCROLLER_X + INVENTORY_SLOT_WIDTH / 2 - width / 2;
-        int y = INVENTORY_LOOT_LEFT_SCROLLER_Y + INVENTORY_SLOT_HEIGHT * inven_cur_disp + 2;
-        text_to_buf(windowBuffer + pitch * y + x, formattedText, width, pitch, color);
-
-        text_font(oldFont);
+        show_items_weight(stack[curr_stack], windowBuffer, pitch, INVENTORY_LOOT_LEFT_SCROLLER_X, INVENTORY_LOOT_LEFT_SCROLLER_Y);
     }
 
     win_draw(i_wid);
@@ -1565,51 +1575,7 @@ void display_target_inventory(int first_item_index, int selected_index, Inventor
 
     // CE: Show items weight.
     if (inventoryWindowType == INVENTORY_WINDOW_TYPE_LOOT) {
-        char formattedText[20];
-        formattedText[0] = '\0';
-
-        int oldFont = text_curr();
-        text_font(101);
-
-        CacheEntry* key;
-        int backgroundFid = art_id(OBJ_TYPE_INTERFACE, 114, 0, 0, 0);
-        unsigned char* data = art_ptr_lock_data(backgroundFid, 0, 0, &key);
-        if (data != NULL) {
-            int x = INVENTORY_LOOT_RIGHT_SCROLLER_X;
-            int y = INVENTORY_LOOT_RIGHT_SCROLLER_Y + INVENTORY_SLOT_HEIGHT * inven_cur_disp + 2;
-            buf_to_buf(data + pitch * y + x,
-                INVENTORY_SLOT_WIDTH,
-                text_height(),
-                pitch,
-                windowBuffer + pitch * y + x,
-                pitch);
-            art_ptr_unlock(key);
-        }
-
-        Object* object = target_stack[target_curr_stack];
-
-        int color = colorTable[992];
-        if (PID_TYPE(object->pid) == OBJ_TYPE_CRITTER) {
-            int currentWeight = item_total_weight(object);
-            int maxWeight = stat_level(object, STAT_CARRY_WEIGHT);
-            snprintf(formattedText, sizeof(formattedText), "%d/%d", currentWeight, maxWeight);
-        } else if (PID_TYPE(object->pid) == OBJ_TYPE_ITEM) {
-            if (item_get_type(object) == ITEM_TYPE_CONTAINER) {
-                int currentSize = item_c_curr_size(object);
-                int maxSize = item_c_max_size(object);
-                snprintf(formattedText, sizeof(formattedText), "%d/%d", currentSize, maxSize);
-            }
-        } else {
-            int inventoryWeight = item_total_weight(object);
-            snprintf(formattedText, sizeof(formattedText), "%d", inventoryWeight);
-        }
-
-        int width = text_width(formattedText);
-        int x = INVENTORY_LOOT_RIGHT_SCROLLER_X + INVENTORY_SLOT_WIDTH / 2 - width / 2;
-        int y = INVENTORY_LOOT_RIGHT_SCROLLER_Y + INVENTORY_SLOT_HEIGHT * inven_cur_disp + 2;
-        text_to_buf(windowBuffer + pitch * y + x, formattedText, width, pitch, color);
-
-        text_font(oldFont);
+        show_items_weight(target_stack[target_curr_stack], windowBuffer, pitch, INVENTORY_LOOT_RIGHT_SCROLLER_X, INVENTORY_LOOT_RIGHT_SCROLLER_Y);
     }
 }
 
